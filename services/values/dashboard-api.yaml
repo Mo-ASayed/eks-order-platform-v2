@@ -1,0 +1,18 @@
+# dashboard-api reference values from services/dashboard-api/main.go
+service: dashboard-api
+role: read-side aggregation for dashboard
+port: 8086
+requestPath: true        # candidate for HPA (read traffic)
+publicFacing: false      # reached via api-gateway only
+probes:
+  liveness:  { path: /livez,   port: 8086 }   # always 200
+  readiness: { path: /healthz, port: 8086 }   # pings DB, returns 503 when DB down
+dependencies:
+  postgres: true
+  redis: false
+  sqs: false
+env:
+  PORT: "8086"
+  DATABASE_URL: ""       # Required, postgres, contains password.
+secrets:
+  - DATABASE_URL

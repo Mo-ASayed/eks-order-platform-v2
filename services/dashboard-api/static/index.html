@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Platform</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #eef2f8;
+            --panel: #ffffff;
+            --panel-soft: #f7f9fc;
+            --panel-lift: #ffffff;
+            --line: rgba(15, 23, 42, 0.10);
+            --line-strong: rgba(15, 23, 42, 0.16);
+            --text: #0f1722;
+            --muted: #5b6b80;
+            --soft: #33425a;
+            --blue: #2f80ed;
+            --green: #17a35b;
+            --amber: #c97f0a;
+            --red: #e5484d;
+            --violet: #7c5cff;
+            --shadow: 0 18px 50px rgba(15, 23, 42, 0.10);
+            --ease: cubic-bezier(.2, .7, .2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { min-height: 100%; background: var(--bg); }
+        body {
+            min-height: 100vh;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 18% 0%, rgba(47, 128, 237, 0.08), transparent 32rem),
+                radial-gradient(circle at 88% 12%, rgba(23, 163, 91, 0.07), transparent 28rem),
+                linear-gradient(180deg, #f6f9fe 0%, var(--bg) 42rem);
+            color: var(--text);
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image: linear-gradient(rgba(15,23,42,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,.025) 1px, transparent 1px);
+            background-size: 56px 56px;
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,.5), transparent 68%);
+        }
+
+        /* Aurora sits above the body background and below app content. */
+        .aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+        .aurora .blob {
+            position: absolute;
+            width: 54rem;
+            height: 54rem;
+            border-radius: 50%;
+            filter: blur(76px);
+            opacity: 0.75;
+            transform: translateZ(0);
+            will-change: transform;
+        }
+        .blob-a { background: radial-gradient(circle, rgba(99,102,241,0.55), transparent 62%); top: -16rem; left: -10rem; animation: driftA 26s var(--ease) infinite alternate; }
+        .blob-b { background: radial-gradient(circle, rgba(34,211,238,0.46), transparent 62%); top: 8%; right: -16rem; animation: driftB 32s var(--ease) infinite alternate; }
+        .blob-c { background: radial-gradient(circle, rgba(168,85,247,0.50), transparent 62%); bottom: -18rem; left: 18%; animation: driftC 30s var(--ease) infinite alternate; }
+        .blob-d { background: radial-gradient(circle, rgba(45,212,191,0.42), transparent 62%); top: 34%; left: 42%; animation: driftD 36s var(--ease) infinite alternate; }
+        @keyframes driftA { from { transform: translate3d(0,0,0) scale(1); }    to { transform: translate3d(10rem,7rem,0) scale(1.18); } }
+        @keyframes driftB { from { transform: translate3d(0,0,0) scale(1.06); } to { transform: translate3d(-9rem,5rem,0) scale(0.9); } }
+        @keyframes driftC { from { transform: translate3d(0,0,0) scale(1); }    to { transform: translate3d(7rem,-8rem,0) scale(1.22); } }
+        @keyframes driftD { from { transform: translate3d(0,0,0) scale(0.95); } to { transform: translate3d(-6rem,-6rem,0) scale(1.15); } }
+
+        .container { width: min(1440px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; position: relative; z-index: 1; }
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 18px;
+            margin-bottom: 22px;
+        }
+        h1 {
+            font-size: clamp(1.45rem, 2vw, 2.25rem);
+            line-height: 1.1;
+            font-weight: 780;
+            letter-spacing: -0.01em;
+            color: #1e1b4b;
+            background: linear-gradient(100deg, #4f46e5 0%, #7c3aed 45%, #0ea5e9 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        h2 { font-size: 0.88rem; margin-bottom: 14px; color: var(--soft); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+        .eyebrow { color: var(--green); font-size: 0.76rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 8px; }
+        .subtitle { color: var(--muted); margin-top: 8px; font-size: 0.92rem; }
+
+        .refresh {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            flex: 0 0 auto;
+            border: 1px solid var(--line-strong);
+            background: var(--panel);
+            color: var(--text);
+            cursor: pointer;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 0.84rem;
+            font-weight: 700;
+            box-shadow: 0 8px 22px rgba(15,23,42,.08);
+            transition: transform .18s var(--ease), border-color .18s var(--ease), background .18s var(--ease);
+        }
+        .refresh::before { content: "↻"; font-size: 1rem; line-height: 1; }
+        .refresh:hover { transform: translateY(-1px); border-color: rgba(100,181,255,.55); background: rgba(100,181,255,.12); }
+
+        .grid { display: grid; grid-template-columns: repeat(5, minmax(160px, 1fr)); gap: 14px; margin-bottom: 22px; }
+        .card {
+            position: relative;
+            overflow: hidden;
+            background: rgba(255,255,255,0.70);
+            backdrop-filter: blur(10px) saturate(1.1);
+            -webkit-backdrop-filter: blur(10px) saturate(1.1);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 18px;
+            box-shadow: 0 8px 26px rgba(15,23,42,.07);
+            transition: transform .2s var(--ease), border-color .2s var(--ease), background .2s var(--ease);
+        }
+        .card::after {
+            content: "";
+            position: absolute;
+            inset: auto 16px 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(99,102,241,.85), rgba(168,85,247,.85), transparent);
+            opacity: 0;
+            transition: opacity .2s var(--ease);
+        }
+        .card:hover { transform: translateY(-3px); border-color: rgba(47,128,237,.40); background: rgba(255,255,255,0.82); }
+        .card:hover::after { opacity: 1; }
+        .card-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.09em; font-weight: 800; }
+        .card-value { font-size: clamp(1.55rem, 2.8vw, 2.35rem); font-weight: 780; margin-top: 8px; line-height: 1; letter-spacing: 0; }
+        .card-value.green { color: var(--green); }
+        .card-value.blue { color: var(--blue); }
+        .card-value.orange { color: var(--amber); }
+        .card-value.red { color: var(--red); }
+
+        .section {
+            background: rgba(255,255,255,0.78);
+            backdrop-filter: blur(12px) saturate(1.1);
+            -webkit-backdrop-filter: blur(12px) saturate(1.1);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 18px;
+            box-shadow: var(--shadow);
+            overflow-x: auto;
+        }
+
+        table { width: 100%; min-width: 760px; border-collapse: collapse; }
+        th { text-align: left; padding: 10px 12px; font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 1px solid var(--line-strong); font-weight: 800; white-space: nowrap; }
+        td { padding: 12px; border-bottom: 1px solid rgba(15, 23, 42, 0.07); font-size: 0.9rem; color: #1f2a37; vertical-align: middle; }
+        tr { transition: background .16s var(--ease); }
+        tr:hover { background: rgba(100, 181, 255, 0.07); }
+        tbody tr:last-child td { border-bottom: 0; }
+
+        .badge { display: inline-flex; align-items: center; justify-content: center; min-height: 24px; padding: 3px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; text-transform: capitalize; background: rgba(150,163,181,.16); color: var(--soft); border: 1px solid rgba(150,163,181,.18); white-space: nowrap; }
+        .badge-pending { background: rgba(201,127,10,.14); color: #8a5800; border-color: rgba(201,127,10,.30); }
+        .badge-confirmed { background: rgba(47,128,237,.14); color: #1a5fb4; border-color: rgba(47,128,237,.30); }
+        .badge-processing { background: rgba(124,92,255,.14); color: #5b3fd1; border-color: rgba(124,92,255,.30); }
+        .badge-shipped { background: rgba(23,163,91,.14); color: #0f7a43; border-color: rgba(23,163,91,.30); }
+        .badge-delivered { background: rgba(23,163,91,.20); color: #0c6638; border-color: rgba(23,163,91,.38); }
+        .badge-cancelled { background: rgba(229,72,77,.14); color: #b42318; border-color: rgba(229,72,77,.30); }
+
+        .btn {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 38px;
+            padding: 9px 15px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.84rem;
+            font-weight: 800;
+            color: #071018;
+            transition: transform .16s var(--ease), box-shadow .16s var(--ease), filter .16s var(--ease), border-color .16s var(--ease);
+        }
+        .btn:hover { transform: translateY(-1px); filter: brightness(1.06); }
+        .btn:active { transform: translateY(0); }
+        .btn-primary { color: #ffffff; background: linear-gradient(135deg, #6366f1, #8b5cf6); box-shadow: 0 12px 26px rgba(99,102,241,.28); }
+        .btn-sm { min-height: 30px; padding: 5px 10px; font-size: 0.72rem; }
+        .btn-blue { background: rgba(47,128,237,.12); color: #1a5fb4; border-color: rgba(47,128,237,.32); }
+        .btn-orange { background: rgba(201,127,10,.12); color: #8a5800; border-color: rgba(201,127,10,.32); }
+
+        .form-row { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px; margin-bottom: 2px; align-items: center; }
+        .form-row input, .form-row select {
+            grid-column: span 3;
+            width: 100%;
+            min-width: 0;
+            min-height: 42px;
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #f3f6fb;
+            color: var(--text);
+            font-size: 0.88rem;
+            outline: none;
+            transition: border-color .16s var(--ease), box-shadow .16s var(--ease), background .16s var(--ease);
+        }
+        .form-row input:focus, .form-row select:focus { border-color: rgba(47,128,237,.62); box-shadow: 0 0 0 3px rgba(47,128,237,.13); background: #ffffff; }
+        .form-row .btn { grid-column: span 2; }
+        .form-row input[style] { max-width: none !important; }
+
+        .tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 18px;
+            padding: 6px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--panel-soft);
+            overflow-x: auto;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
+        }
+        .tab {
+            flex: 0 0 auto;
+            padding: 10px 14px;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 0.84rem;
+            color: var(--muted);
+            font-weight: 800;
+            transition: color .18s var(--ease), background .18s var(--ease), transform .18s var(--ease);
+        }
+        .tab.active { color: #ffffff; background: linear-gradient(135deg, #6366f1, #a855f7); box-shadow: 0 10px 24px rgba(99,102,241,.28); }
+        .tab:hover:not(.active) { color: var(--text); background: rgba(15,23,42,.05); transform: translateY(-1px); }
+
+        .panel { display: none; animation: panelIn .24s var(--ease); }
+        .panel.active { display: block; }
+        @keyframes panelIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        .service-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+        .service-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+        .service-tab {
+            border: 1px solid var(--line);
+            background: var(--panel);
+            color: var(--muted);
+            border-radius: 999px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 800;
+            transition: background .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease);
+        }
+        .service-tab:hover { transform: translateY(-1px); color: var(--text); border-color: rgba(47,128,237,.34); }
+        .service-tab.active { color: #ffffff; background: var(--green); border-color: transparent; }
+        .service-summary { color: var(--muted); font-size: 0.82rem; font-weight: 700; }
+        .services-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+        .service-card {
+            position: relative;
+            min-height: 82px;
+            padding: 14px;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            background: var(--panel);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform .18s var(--ease), border-color .18s var(--ease), background .18s var(--ease);
+        }
+        .service-card:hover { transform: translateY(-2px); border-color: rgba(47,128,237,.34); background: #fbfdff; }
+        .service-name { font-size: 0.9rem; font-weight: 800; }
+        .service-meta { display: block; margin-top: 7px; color: var(--muted); font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+        .dot { width: 11px; height: 11px; border-radius: 50%; box-shadow: 0 0 0 5px rgba(150,163,181,.08); }
+        .dot-green { background: var(--green); box-shadow: 0 0 0 5px rgba(85,215,137,.12), 0 0 18px rgba(85,215,137,.52); }
+        .dot-red { background: var(--red); box-shadow: 0 0 0 5px rgba(255,107,107,.12), 0 0 18px rgba(255,107,107,.42); }
+        .dot-grey { background: #647084; }
+
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            max-width: min(360px, calc(100% - 40px));
+            padding: 13px 16px;
+            border-radius: 8px;
+            background: rgba(85, 215, 137, 0.96);
+            color: #071018;
+            font-size: 0.86rem;
+            font-weight: 800;
+            display: none;
+            z-index: 100;
+            box-shadow: 0 18px 48px rgba(0,0,0,.34);
+        }
+        #toast.error { background: rgba(255, 107, 107, 0.96); color: #fff; }
+
+        @media (max-width: 1040px) {
+            .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .form-row input, .form-row select { grid-column: span 6; }
+            .form-row .btn { grid-column: span 6; }
+        }
+        @media (max-width: 680px) {
+            .container { width: min(100% - 20px, 1440px); padding-top: 18px; }
+            .topbar { align-items: flex-start; flex-direction: column; }
+            .grid { grid-template-columns: 1fr; }
+            .form-row { grid-template-columns: 1fr; }
+            .form-row input, .form-row select, .form-row .btn { grid-column: auto; }
+            .section { padding: 14px; }
+            .refresh { width: 100%; justify-content: center; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.001ms !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="aurora" aria-hidden="true">
+        <span class="blob blob-a"></span>
+        <span class="blob blob-b"></span>
+        <span class="blob blob-c"></span>
+        <span class="blob blob-d"></span>
+    </div>
+    <div class="container">
+        <div class="topbar">
+            <div>
+                <div class="eyebrow">Live Operations</div>
+                <h1>Order Fulfillment Platform</h1>
+                <p class="subtitle">Orders, stock, payments, shipping, and service health in one control plane.</p>
+            </div>
+            <button class="refresh" onclick="refreshAll()" type="button">Refresh</button>
+        </div>
+
+        <div class="grid" id="stats"></div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('orders', this)">Orders</div>
+            <div class="tab" onclick="showTab('inventory', this)">Inventory</div>
+            <div class="tab" onclick="showTab('payments', this)">Payments</div>
+            <div class="tab" onclick="showTab('shipping', this)">Shipping</div>
+            <div class="tab" onclick="showTab('notifications', this)">Notifications</div>
+            <div class="tab" onclick="showTab('services', this)">Services</div>
+        </div>
+
+        <!-- Orders -->
+        <div class="panel active" id="panel-orders">
+            <div class="section">
+                <h2>Create Order</h2>
+                <div class="form-row">
+                    <select id="order-product" onchange="updateOrderPreview()"></select>
+                    <input type="number" id="order-qty" placeholder="Qty" value="1" min="1" oninput="updateOrderPreview()" onblur="if(!this.value||this.valueAsNumber<1){this.value=1;updateOrderPreview();}">
+                    <button class="btn btn-primary" onclick="createOrder()">Place Order</button>
+                </div>
+                <div id="order-line-total" style="margin-top:10px;color:#8b949e;font-size:0.9rem">—</div>
+            </div>
+            <div class="section">
+                <h2>Orders</h2>
+                <div id="orders-bulk-bar" style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+                    <span id="orders-selected-count" style="color:#8b949e;font-size:0.85rem;min-width:78px">0 selected</span>
+                    <button class="btn btn-sm btn-blue" onclick="bulkAdvance()">Advance selected →</button>
+                    <button class="btn btn-sm btn-orange" onclick="bulkCancel()">Cancel selected</button>
+                </div>
+                <table>
+                    <thead><tr><th style="width:34px"><input type="checkbox" id="orders-select-all" onchange="toggleSelectAll(this.checked)" title="Select all"></th><th>ID</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+                    <tbody id="orders-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Inventory -->
+        <div class="panel" id="panel-inventory">
+            <div class="section">
+                <h2>Add Product</h2>
+                <div class="form-row">
+                    <input type="text" id="prod-id" placeholder="Product ID">
+                    <input type="text" id="prod-name" placeholder="Name">
+                    <input type="text" id="prod-sku" placeholder="SKU">
+                    <input type="number" id="prod-price" placeholder="Price" step="0.01" style="max-width:100px">
+                    <input type="number" id="prod-stock" placeholder="Stock" style="max-width:80px">
+                    <button class="btn btn-primary" onclick="addProduct()">Add</button>
+                </div>
+            </div>
+            <div class="section">
+                <h2>Products</h2>
+                <table>
+                    <thead><tr><th>ID</th><th>Name</th><th>SKU</th><th>Price</th><th>Stock</th><th>Reserved</th><th>Available</th></tr></thead>
+                    <tbody id="inventory-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Payments -->
+        <div class="panel" id="panel-payments">
+            <div class="section">
+                <h2>Revenue</h2>
+                <div id="revenue-info"></div>
+            </div>
+            <div class="section">
+                <h2>Ledger</h2>
+                <table>
+                    <thead><tr><th>Payment</th><th>Type</th><th>Debit</th><th>Credit</th><th>Description</th><th>Date</th></tr></thead>
+                    <tbody id="ledger-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Shipping -->
+        <div class="panel" id="panel-shipping">
+            <div class="section">
+                <h2>Shipments</h2>
+                <table>
+                    <thead><tr><th>ID</th><th>Order</th><th>Carrier</th><th>Tracking</th><th>Status</th><th>Recipient</th></tr></thead>
+                    <tbody id="shipping-table"></tbody>
+                </table>
+            </div>
+            <div class="section">
+                <h2>Overview</h2>
+                <div id="shipping-overview"></div>
+            </div>
+        </div>
+
+        <!-- Notifications -->
+        <div class="panel" id="panel-notifications">
+            <div class="section">
+                <h2>Recent Notifications</h2>
+                <table>
+                    <thead><tr><th>ID</th><th>Recipient</th><th>Channel</th><th>Template</th><th>Subject</th><th>Status</th><th>Sent</th></tr></thead>
+                    <tbody id="notif-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Services -->
+        <div class="panel" id="panel-services">
+            <div class="section">
+                <h2>Service Health</h2>
+                <div class="service-toolbar">
+                    <div class="service-tabs">
+                        <button class="service-tab active" type="button" onclick="showServiceGroup('all', this)">All</button>
+                        <button class="service-tab" type="button" onclick="showServiceGroup('core', this)">Core</button>
+                        <button class="service-tab" type="button" onclick="showServiceGroup('orders', this)">Orders</button>
+                        <button class="service-tab" type="button" onclick="showServiceGroup('fulfillment', this)">Fulfillment</button>
+                    </div>
+                    <span class="service-summary" id="service-summary">Checking services...</span>
+                </div>
+                <div class="services-grid" id="services-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        const API = window.location.origin;
+        let token = localStorage.getItem('token') || '';
+        const TOKEN_REFRESH_SKEW_SECONDS = 300;
+        let activeServiceGroup = 'all';
+        let serviceStates = [];
+
+        function tokenExpiresSoon() {
+            if (!token) return true;
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                if (!payload.exp) return true;
+                return payload.exp <= Math.floor(Date.now() / 1000) + TOKEN_REFRESH_SKEW_SECONDS;
+            } catch(e) {
+                return true;
+            }
+        }
+
+        async function login() {
+            const r = await fetch(API + '/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: 'admin@platform.local', password: 'admin' })
+            });
+            const d = await r.json();
+            token = d.token || '';
+            if (token) localStorage.setItem('token', token);
+            return token;
+        }
+
+        // Auto-login on load
+        if (!token) {
+            login().catch(() => {});
+        }
+
+        function headers() {
+            return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+        }
+
+        async function apiFetch(path, options = {}, retry = true) {
+            if (tokenExpiresSoon()) await login();
+            const r = await fetch(API + path, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
+            if (r.status === 401 && retry) {
+                localStorage.removeItem('token');
+                token = '';
+                await login();
+                return apiFetch(path, options, false);
+            }
+            return r;
+        }
+
+        function toast(msg, error) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = error ? 'error' : '';
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3000);
+        }
+
+        function showTab(name, tabEl) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            if (tabEl) tabEl.classList.add('active');
+            document.getElementById('panel-' + name).classList.add('active');
+            refreshAll();
+        }
+
+        function showServiceGroup(group, tabEl) {
+            activeServiceGroup = group;
+            document.querySelectorAll('.service-tab').forEach(t => t.classList.remove('active'));
+            if (tabEl) tabEl.classList.add('active');
+            renderServices(serviceStates);
+        }
+
+        function badge(status) {
+            return `<span class="badge badge-${status}">${status}</span>`;
+        }
+
+        function ts(s) {
+            if (!s) return '-';
+            return new Date(s).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        }
+
+        function money(n) { return '£' + Number(n || 0).toFixed(2); }
+
+        // --- Stats ---
+        async function loadStats() {
+            try {
+                const r = await fetch(API + '/dashboard/summary');
+                const d = await r.json();
+                document.getElementById('stats').innerHTML = `
+                    <div class="card"><div class="card-label">Total Orders</div><div class="card-value blue">${d.orders?.total || 0}</div></div>
+                    <div class="card"><div class="card-label">Today's Orders</div><div class="card-value green">${d.orders?.today || 0}</div></div>
+                    <div class="card"><div class="card-label">Revenue</div><div class="card-value green">${money(d.revenue?.total)}</div></div>
+                    <div class="card"><div class="card-label">Low Stock Alerts</div><div class="card-value ${d.inventory?.low_stock > 0 ? 'red' : 'green'}">${d.inventory?.low_stock || 0}</div></div>
+                    <div class="card"><div class="card-label">Active Shipments</div><div class="card-value orange">${d.shipping?.active_shipments || 0}</div></div>
+                `;
+            } catch(e) { console.error('Stats error', e); }
+        }
+
+        // --- Orders ---
+        const ORDER_NEXT = { pending: 'confirmed', confirmed: 'processing', processing: 'shipped', shipped: 'delivered' };
+        const CANCELLABLE = ['pending', 'confirmed', 'processing'];
+        let selectedOrders = new Set();   // order ids ticked for bulk actions
+        let orderStatusById = {};         // id -> current status, for bulk decisions
+
+        async function loadOrders() {
+            try {
+                const r = await apiFetch('/api/orders/');
+                const tbody = document.getElementById('orders-table');
+                if (!r.ok) { tbody.innerHTML = `<tr><td colspan="8" style="color:#f85149">Couldn't load orders (${r.status})</td></tr>`; return; }
+                const orders = await r.json();
+                orderStatusById = {};
+                if (!orders || !orders.length) { tbody.innerHTML = '<tr><td colspan="8" style="color:#8b949e">No orders yet</td></tr>'; syncOrderSelectionUI(); return; }
+                tbody.innerHTML = orders.map(o => {
+                    orderStatusById[o.id] = o.status;
+                    const items = (typeof o.items === 'string' ? JSON.parse(o.items) : o.items) || [];
+                    const itemStr = items.map(i => `${i.product_id} x${i.quantity}`).join(', ');
+                    let actions = '';
+                    if (ORDER_NEXT[o.status]) {
+                        actions = `<button class="btn btn-sm btn-blue" onclick="advanceOrder(${o.id},'${ORDER_NEXT[o.status]}')">${ORDER_NEXT[o.status]}</button>`;
+                    }
+                    if (CANCELLABLE.includes(o.status)) {
+                        actions += ` <button class="btn btn-sm btn-orange" onclick="advanceOrder(${o.id},'cancelled')">cancel</button>`;
+                    }
+                    const checked = selectedOrders.has(o.id) ? 'checked' : '';
+                    return `<tr><td><input type="checkbox" class="order-check" value="${o.id}" onchange="toggleOrderSelect(${o.id}, this.checked)" ${checked}></td><td>${o.id}</td><td>${o.customer_id}</td><td>${itemStr}</td><td>${money(o.total)}</td><td>${badge(o.status)}</td><td>${ts(o.created_at)}</td><td>${actions}</td></tr>`;
+                }).join('');
+                // Drop selections for orders that no longer exist.
+                selectedOrders.forEach(id => { if (!(id in orderStatusById)) selectedOrders.delete(id); });
+                syncOrderSelectionUI();
+            } catch(e) { console.error('Orders error', e); }
+        }
+
+        function toggleOrderSelect(id, checked) {
+            if (checked) selectedOrders.add(id); else selectedOrders.delete(id);
+            syncOrderSelectionUI();
+        }
+
+        function toggleSelectAll(checked) {
+            document.querySelectorAll('#orders-table .order-check').forEach(cb => {
+                cb.checked = checked;
+                const id = Number(cb.value);
+                if (checked) selectedOrders.add(id); else selectedOrders.delete(id);
+            });
+            syncOrderSelectionUI();
+        }
+
+        function syncOrderSelectionUI() {
+            const countEl = document.getElementById('orders-selected-count');
+            if (countEl) countEl.textContent = `${selectedOrders.size} selected`;
+            const boxes = document.querySelectorAll('#orders-table .order-check');
+            const selectAll = document.getElementById('orders-select-all');
+            if (selectAll) selectAll.checked = boxes.length > 0 && [...boxes].every(cb => cb.checked);
+        }
+
+        // Apply a status transition to every eligible selected order, then refresh.
+        async function bulkTransition(targetFor, label) {
+            const ids = [...selectedOrders].filter(id => targetFor(orderStatusById[id]));
+            if (!ids.length) { toast(`No selected orders can ${label}`, true); return; }
+            let ok = 0, fail = 0;
+            for (const id of ids) {
+                try {
+                    const r = await apiFetch('/api/orders/status', {
+                        method: 'PUT',
+                        body: JSON.stringify({ order_id: id, new_status: targetFor(orderStatusById[id]) })
+                    });
+                    r.ok ? ok++ : fail++;
+                } catch(e) { fail++; }
+            }
+            toast(`${label}: ${ok} order(s)${fail ? `, ${fail} failed` : ''}`, fail > 0);
+            selectedOrders.clear();
+            refreshAll();
+        }
+
+        function bulkAdvance() {
+            bulkTransition(status => ORDER_NEXT[status], 'advance');
+        }
+
+        function bulkCancel() {
+            bulkTransition(status => CANCELLABLE.includes(status) ? 'cancelled' : undefined, 'cancel');
+        }
+
+        async function createOrder() {
+            const product = document.getElementById('order-product').value;
+            const qty = parseInt(document.getElementById('order-qty').value) || 1;
+            if (!product) { toast('Select a product', true); return; }
+
+            try {
+                // Price is resolved server-side from inventory; we only send product + qty.
+                const r = await apiFetch('/api/orders/', {
+                    method: 'POST',
+                    body: JSON.stringify({ items: [{ product_id: product, quantity: qty }] })
+                });
+                const d = await r.json();
+                if (r.ok) { toast('Order #' + d.id + ' created'); refreshAll(); }
+                else { toast(d.error || 'Failed', true); }
+            } catch(e) { toast('Error creating order', true); }
+        }
+
+        // Products available for the create-order dropdown, keyed by ID.
+        let orderProducts = {};
+
+        function populateOrderProducts(products) {
+            const select = document.getElementById('order-product');
+            if (!select) return;
+            const previous = select.value;
+            orderProducts = {};
+            const options = (products || []).map(p => {
+                orderProducts[p.id] = p;
+                const avail = p.available ?? (p.stock - p.reserved);
+                return `<option value="${p.id}">${p.name} — ${money(p.price)} (${avail} available)</option>`;
+            });
+            select.innerHTML = options.length
+                ? options.join('')
+                : '<option value="">No products — add one in Inventory</option>';
+            // Preserve the user's selection across the 10s auto-refresh.
+            if (previous && orderProducts[previous]) select.value = previous;
+            updateOrderPreview();
+        }
+
+        function updateOrderPreview() {
+            const el = document.getElementById('order-line-total');
+            if (!el) return;
+            const p = orderProducts[document.getElementById('order-product').value];
+            const qty = parseInt(document.getElementById('order-qty').value) || 1;
+            el.textContent = p ? `${money(p.price)} × ${qty} = ${money(p.price * qty)}` : '—';
+        }
+
+        async function advanceOrder(id, status) {
+            try {
+                const r = await apiFetch('/api/orders/status', {
+                    method: 'PUT',
+                    body: JSON.stringify({ order_id: id, new_status: status })
+                });
+                if (r.ok) { toast(`Order #${id} -> ${status}`); refreshAll(); }
+                else { const d = await r.json(); toast(d.error || 'Failed', true); }
+            } catch(e) { toast('Error updating order', true); }
+        }
+
+        // --- Inventory ---
+        async function loadInventory() {
+            try {
+                const r = await apiFetch('/api/inventory/products');
+                const tbody = document.getElementById('inventory-table');
+                if (!r.ok) { tbody.innerHTML = `<tr><td colspan="7" style="color:#f85149">Couldn't load inventory (${r.status})</td></tr>`; return; }
+                const products = await r.json();
+                populateOrderProducts(products);
+                if (!products || !products.length) { tbody.innerHTML = '<tr><td colspan="7" style="color:#8b949e">No products yet</td></tr>'; return; }
+                tbody.innerHTML = products.map(p => {
+                    const avail = p.available ?? (p.stock - p.reserved);
+                    const color = avail < 10 ? 'color:#f85149' : '';
+                    return `<tr><td>${p.id}</td><td>${p.name}</td><td>${p.sku}</td><td>${money(p.price)}</td><td>${p.stock}</td><td>${p.reserved}</td><td style="${color}">${avail}</td></tr>`;
+                }).join('');
+            } catch(e) { console.error('Inventory error', e); }
+        }
+
+        async function addProduct() {
+            const data = {
+                id: document.getElementById('prod-id').value,
+                name: document.getElementById('prod-name').value,
+                sku: document.getElementById('prod-sku').value,
+                price: parseFloat(document.getElementById('prod-price').value) || 0,
+                stock: parseInt(document.getElementById('prod-stock').value) || 0
+            };
+            if (!data.id || !data.name) { toast('Fill in product details', true); return; }
+            try {
+                const r = await apiFetch('/api/inventory/products', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+                if (r.ok) { toast('Product added'); refreshAll(); }
+                else { const d = await r.json(); toast(d.error || 'Failed', true); }
+            } catch(e) { toast('Error adding product', true); }
+        }
+
+        // --- Payments ---
+        async function loadPayments() {
+            try {
+                const r = await fetch(API + '/dashboard/revenue');
+                const d = await r.json();
+                document.getElementById('revenue-info').innerHTML = `
+                    <div class="grid">
+                        <div class="card"><div class="card-label">Total Revenue</div><div class="card-value green">${money(d.total)}</div></div>
+                        <div class="card"><div class="card-label">Refunded</div><div class="card-value red">${money(d.refunded)}</div></div>
+                        <div class="card"><div class="card-label">Net</div><div class="card-value blue">${money(d.net)}</div></div>
+                    </div>
+                `;
+            } catch(e) {}
+
+            try {
+                const r = await apiFetch('/api/payments/ledger');
+                const tbody = document.getElementById('ledger-table');
+                if (!r.ok) { tbody.innerHTML = `<tr><td colspan="6" style="color:#f85149">Couldn't load ledger (${r.status})</td></tr>`; return; }
+                const entries = await r.json();
+                if (!entries || !entries.length) { tbody.innerHTML = '<tr><td colspan="6" style="color:#8b949e">No entries</td></tr>'; return; }
+                tbody.innerHTML = entries.map(e => 
+                    `<tr><td style="font-size:0.75rem">${e.payment_id}</td><td>${badge(e.entry_type)}</td><td>${e.debit > 0 ? money(e.debit) : '-'}</td><td>${e.credit > 0 ? money(e.credit) : '-'}</td><td>${e.description}</td><td>${ts(e.created_at)}</td></tr>`
+                ).join('');
+            } catch(e) {}
+        }
+
+        // --- Shipping ---
+        async function loadShipping() {
+            try {
+                const r = await apiFetch('/api/shipping/shipments');
+                const tbody = document.getElementById('shipping-table');
+                if (!r.ok) { tbody.innerHTML = `<tr><td colspan="6" style="color:#f85149">Couldn't load shipments (${r.status})</td></tr>`; return; }
+                const shipments = await r.json();
+                if (!shipments || !shipments.length) { tbody.innerHTML = '<tr><td colspan="6" style="color:#8b949e">No shipments</td></tr>'; return; }
+                tbody.innerHTML = shipments.map(s =>
+                    `<tr><td>${s.id}</td><td>${s.order_id}</td><td>${s.carrier}</td><td>${s.tracking_number || '-'}</td><td>${badge(s.status)}</td><td>${s.recipient_name}</td></tr>`
+                ).join('');
+            } catch(e) {}
+
+            try {
+                const r = await fetch(API + '/dashboard/shipping/overview');
+                const d = await r.json();
+                const statuses = Object.entries(d.by_status || {}).map(([k,v]) => `${badge(k)} ${v}`).join('&nbsp;&nbsp;');
+                const carriers = Object.entries(d.by_carrier || {}).map(([k,v]) => `${k}: ${v}`).join(', ');
+                document.getElementById('shipping-overview').innerHTML = `
+                    <p style="margin-bottom:8px">${statuses || 'No shipments'}</p>
+                    <p style="color:#8b949e;font-size:0.85rem">Carriers: ${carriers || '-'} | Avg delivery: ${(d.avg_delivery_hours || 0).toFixed(1)}h</p>
+                `;
+            } catch(e) {}
+        }
+
+        // --- Notifications ---
+        async function loadNotifications() {
+            try {
+                const r = await apiFetch('/api/notifications/history');
+                const tbody = document.getElementById('notif-table');
+                if (!r.ok) { tbody.innerHTML = `<tr><td colspan="7" style="color:#f85149">Couldn't load notifications (${r.status})</td></tr>`; return; }
+                const notifs = await r.json();
+                if (!notifs || !notifs.length) { tbody.innerHTML = '<tr><td colspan="7" style="color:#8b949e">No notifications</td></tr>'; return; }
+                tbody.innerHTML = notifs.map(n =>
+                    `<tr><td>${n.id}</td><td>${n.recipient}</td><td>${n.channel}</td><td>${n.template}</td><td>${n.subject || '-'}</td><td>${badge(n.status)}</td><td>${ts(n.sent_at || n.created_at)}</td></tr>`
+                ).join('');
+            } catch(e) {}
+        }
+
+        // --- Services ---
+        async function loadServices() {
+            const services = [
+                { name: 'api-gateway', url: '/healthz', group: 'core', label: 'Edge routing' },
+                { name: 'dashboard-api', url: '/dashboard/healthz', group: 'core', label: 'Control plane' },
+                { name: 'order-service', url: '/api/orders/healthz', group: 'orders', label: 'Order lifecycle' },
+                { name: 'payment-service', url: '/api/payments/healthz', group: 'orders', label: 'Ledger and charges' },
+                { name: 'inventory-service', url: '/api/inventory/healthz', group: 'fulfillment', label: 'Stock availability' },
+                { name: 'notification-service', url: '/api/notifications/healthz', group: 'fulfillment', label: 'Customer messages' },
+                { name: 'shipping-service', url: '/api/shipping/healthz', group: 'fulfillment', label: 'Carrier dispatch' },
+            ];
+
+            serviceStates = services.map(s => ({ ...s, status: 'checking' }));
+            renderServices(serviceStates);
+
+            serviceStates = await Promise.all(services.map(async s => {
+                try {
+                    const r = await fetch(API + s.url, { signal: AbortSignal.timeout(3000) });
+                    const d = await r.json();
+                    return { ...s, status: d.status === 'ok' ? 'ok' : 'down' };
+                } catch(e) {
+                    return { ...s, status: 'down' };
+                }
+            }));
+            renderServices(serviceStates);
+        }
+
+        function renderServices(services) {
+            const grid = document.getElementById('services-grid');
+            const summary = document.getElementById('service-summary');
+            if (!grid) return;
+
+            const filtered = activeServiceGroup === 'all'
+                ? services
+                : services.filter(s => s.group === activeServiceGroup);
+            const healthy = services.filter(s => s.status === 'ok').length;
+            const checking = services.filter(s => s.status === 'checking').length;
+            const total = services.length;
+
+            if (summary) {
+                summary.textContent = checking
+                    ? `Checking ${checking} of ${total}`
+                    : `${healthy}/${total} healthy`;
+            }
+
+            grid.innerHTML = filtered.map(s => {
+                const dotClass = s.status === 'ok' ? 'dot-green' : s.status === 'down' ? 'dot-red' : 'dot-grey';
+                const statusLabel = s.status === 'ok' ? 'Healthy' : s.status === 'down' ? 'Needs attention' : 'Checking';
+                return `
+                    <div class="service-card" id="svc-${s.name}">
+                        <span>
+                            <span class="service-name">${s.name}</span>
+                            <span class="service-meta">${s.label} · ${statusLabel}</span>
+                        </span>
+                        <span class="dot ${dotClass}" aria-label="${statusLabel}"></span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // --- Refresh ---
+        function refreshAll() {
+            loadStats();
+            loadOrders();
+            loadInventory();
+            loadPayments();
+            loadShipping();
+            loadNotifications();
+            loadServices();
+        }
+
+        // Auto-refresh every 10s
+        refreshAll();
+        setInterval(refreshAll, 10000);
+    </script>
+</body>
+</html>

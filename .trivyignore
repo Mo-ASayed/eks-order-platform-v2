@@ -1,0 +1,17 @@
+# Trivy ignore file for eks-v2.
+#
+# Misconfiguration / vulnerability IDs we have reviewed and accepted. Real
+# findings are FIXED in the source, not ignored. Shared by every Trivy scan
+# (image scans in deploy-services.yml, config scans in pr-checks.yml / deploy-infrastructure.yml).
+#
+# Full rationale for the IaC accepts lives in .checkov.yml — the IDs below are
+# Trivy's equivalents of those same accepted findings.
+#
+# Gating: scans are REPORT-ONLY for the first pass (exit-code: '0' in the
+# workflow steps). After a clean re-run, set exit-code to '1' in the trivy steps
+# of .github/workflows/{pr-checks,deploy-infrastructure,deploy-services}.yml to make Trivy block.
+
+AWS-0132   # state bucket uses default SSE-S3, not a CMK — ephemeral lab backend (= CKV_AWS_145)
+AWS-0040   # public EKS endpoint is intentional for OIDC CI/CD + operator access (= CKV_AWS_39)
+AWS-0041   # EKS API open to 0.0.0.0/0 — GHA dynamic IPs, gated by IAM auth (= CKV_AWS_38)
+AWS-0164   # public subnets assign public IPs — required for internet-facing NLB/NAT (= CKV_AWS_130)

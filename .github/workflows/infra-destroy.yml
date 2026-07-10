@@ -1,0 +1,135 @@
+name: Destroy Infrastructure
+
+# Destroys envs/dev in phases while keeping the rebuild anchors:
+# module.dns for the hosted zone and module.github_actions for CI identity.
+# Kubernetes resources go first so controllers can clear finalizers, then NLBs,
+# Karpenter capacity, EKS, a wait for EKS's own control-plane ENIs to release,
+# and finally the VPC.
+# Manual only: typed confirmation plus `dev` environment approval.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "destroy" to confirm tearing down the dev infra'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: infra-cd # shared with infra-cd so apply and destroy never overlap
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  TERRAFORM_VERSION: "1.10.5"
+  TF_WORKING_DIR: terraform/envs/dev
+
+jobs:
+  destroy:
+    name: Terraform destroy (keep DNS)
+    runs-on: ubuntu-latest
+    environment: dev # manual approval gate (required reviewers)
+    steps:
+      # Checkout first so the local pipeline scripts are available.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Validate before AWS or Terraform setup. The typed phrase is passed via
+      # env so arbitrary input cannot alter the shell command.
+      - name: Validate confirmation
+        env:
+          CONFIRM_PHRASE: ${{ github.event.inputs.confirm }}
+        run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/infra-destroy/validate-confirmation.sh" destroy
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init -input=false
+
+      # Finalizer and root-first logic lives in
+      # scripts/pipeline-scripts/infra-destroy/preclean-argocd-apps.sh.
+      - name: Pre-clean ArgoCD applications
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/infra-destroy/preclean-argocd-apps.sh"
+
+      # Delete CNPG Clusters before the operator is torn down so finalizers clear
+      # and the "data" namespace does not hang in Terminating. Logic lives in
+      # scripts/pipeline-scripts/infra-destroy/preclean-stateful-tier.sh.
+      - name: Pre-clean stateful tier
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/infra-destroy/preclean-stateful-tier.sh"
+
+      # Remove app data and queues while controllers still have capacity.
+      - name: Terraform destroy stateful tier and event bus
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform destroy -input=false -auto-approve \
+            -target=module.stateful_tier \
+            -target=module.eventbus
+
+      # external-secrets keeps its CRDs (helm.sh/resource-policy: keep); the helm
+      # provider surfaces Helm's "kept resources" message as an uninstall error
+      # and stalls the platform_addons destroy. Uninstall it cleanly first. Logic
+      # lives in
+      # scripts/pipeline-scripts/infra-destroy/preclean-external-secrets.sh.
+      - name: Pre-clean external-secrets
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/infra-destroy/preclean-external-secrets.sh"
+
+      - name: Terraform destroy platform addons
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform destroy -input=false -auto-approve -target=module.platform_addons
+
+      # NLB ENI wait logic lives in
+      # scripts/pipeline-scripts/infra-destroy/wait-for-load-balancers.sh.
+      - name: Wait for Kubernetes load balancers
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/infra-destroy/wait-for-load-balancers.sh"
+
+      # Karpenter cleanup lives in
+      # scripts/pipeline-scripts/infra-destroy/drain-karpenter-nodes.sh.
+      - name: Drain Karpenter nodes
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/infra-destroy/drain-karpenter-nodes.sh"
+
+      # Capture before module.vpc is destroyed; needed by the ENI wait below.
+      - name: Capture VPC ID
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: echo "VPC_ID=$(terraform output -raw vpc_id)" >> "$GITHUB_ENV"
+
+      # DNS and CI stay out of target scope so the next pipeline can
+      # authenticate and rebuild.
+      - name: Terraform destroy cluster
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform destroy -input=false -auto-approve \
+            -target=aws_eks_access_policy_association.github_actions \
+            -target=aws_eks_access_entry.github_actions \
+            -target=module.karpenter \
+            -target=module.eks
+
+      # EKS's own control-plane ENIs release asynchronously after the cluster
+      # is gone; wait for them so the subnet/VPC destroy below doesn't race it.
+      # Logic lives in
+      # scripts/pipeline-scripts/infra-destroy/wait-for-eks-eni-cleanup.sh.
+      - name: Wait for EKS control-plane ENI cleanup
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/infra-destroy/wait-for-eks-eni-cleanup.sh"
+
+      - name: Terraform destroy VPC
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform destroy -input=false -auto-approve -target=module.vpc

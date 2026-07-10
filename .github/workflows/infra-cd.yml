@@ -1,0 +1,109 @@
+name: Deploy Infrastructure
+
+# Applies terraform/envs/dev against the S3 backend. A security scan
+# (tflint / checkov / trivy) runs first; nothing touches AWS until it passes.
+# All Terraform that mutates AWS (EKS bootstrap, plan and apply) runs in the
+# gated `apply` job, so a push to main never changes cloud state until the
+# `dev` environment approval is granted.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "terraform/**"
+      - ".github/workflows/deploy-infrastructure.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: infra-cd
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  TERRAFORM_VERSION: "1.10.5"
+  TF_WORKING_DIR: terraform/envs/dev
+
+jobs:
+  scan:
+    name: Security scan (tflint / checkov / trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up tflint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: Run tflint
+        working-directory: terraform
+        run: |
+          tflint --init
+          tflint --recursive --config "$(pwd)/.tflint.hcl" --minimum-failure-severity=error
+
+      - name: Run checkov (terraform)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform/
+          framework: terraform
+          config_file: .checkov.yml
+          quiet: true
+          soft_fail: false
+
+      - name: Run trivy config (terraform)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: terraform/
+          severity: CRITICAL,HIGH
+          trivyignores: .trivyignore
+          exit-code: "1"
+
+  apply:
+    name: Terraform apply
+    needs: scan
+    runs-on: ubuntu-latest
+    environment: dev # add required reviewers here for the manual approval gate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init -input=false
+
+      - name: Terraform validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform validate
+
+      # Helm, Kubernetes and kubectl providers need live EKS outputs. If the
+      # cluster is absent, bootstrap EKS first so the full plan can resolve.
+      # This is an apply, so it lives behind the `dev` approval gate.
+      - name: Terraform apply (bootstrap eks)
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -input=false -auto-approve -target=module.eks
+
+      - name: Terraform plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -input=false tfplan

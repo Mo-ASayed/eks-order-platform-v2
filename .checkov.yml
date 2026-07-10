@@ -1,0 +1,28 @@
+# Checkov configuration for eks-v2.
+
+skip-check:
+  # --- EKS API endpoint is intentionally public ---
+  - CKV_AWS_39   # Public EKS endpoint required: GitHub Actions (OIDC) and operator kubectl/argocd reach the API over the internet; access is gated by IAM (authentication_mode = API), not network.
+  - CKV_AWS_38   # API endpoint open to 0.0.0.0/0 because GHA runners use dynamic IPs; still IAM-gated. Tighten public_access_cidrs if a fixed egress IP becomes available.
+
+  # --- False positive from variable indirection ---
+  - CKV_AWS_339  # Cluster runs Kubernetes 1.36 (var.kubernetes_version); Checkov can't resolve the variable, so it assumes an unsupported version.
+
+  # --- Route53 list/get actions cannot be resource-scoped ---
+  - CKV_AWS_356  # external_dns route53 List*/GetChange are account-level and require "*"; ChangeResourceRecordSets is already scoped to the zone. (external_secrets was scoped, so only external_dns trips this.)
+
+  # --- Accepted trade-offs ---
+  - CKV_AWS_274  # GitHub Actions infra role uses AdministratorAccess: it runs full-stack terraform (VPC/EKS/IAM/KMS/Route53/SQS/...). Accepted for the lab CI role — OIDC-gated, no static keys. Revisit with a permissions boundary.
+  - CKV_AWS_149  # App secrets use the AWS-managed Secrets Manager key (encrypted at rest). A CMK adds cost/ops for an ephemeral, nightly-rebuilt lab.
+  - CKV2_AWS_57  # No auto-rotation: credentials are random-generated (random_password) and regenerated on every nightly rebuild; Lambda rotators are out of scope.
+  - CKV_AWS_130  # Public subnets set map_public_ip_on_launch — required for the internet-facing NLB and the NAT gateways that live in those subnets.
+  - CKV2_AWS_11  # No VPC flow logs: cost vs benefit for a nightly-rebuild lab; EKS control-plane audit logging + Prometheus cover observability.
+  - CKV2_AWS_39  # No Route53 query logging — cost / low ROI for the lab hosted zone.
+  - CKV2_AWS_38  # No DNSSEC signing — adds KMS + operational complexity; low ROI for the lab.
+
+  # --- Bootstrap S3 terraform-state bucket (single-region, ephemeral lab) ---
+  - CKV_AWS_18   # No S3 access logging on the state bucket — would need a second log bucket; versioning + public-access-block are the controls that matter here.
+  - CKV_AWS_145  # State bucket uses default SSE-S3 (AES256); a KMS CMK adds cost/ops for an ephemeral lab backend.
+  - CKV_AWS_144  # No cross-region replication on the state bucket — single-region lab, not worth the cost.
+  - CKV2_AWS_61  # No lifecycle config on the state bucket — versions are small and the bucket is recreated for the lab.
+  - CKV2_AWS_62  # No event notifications on the state bucket — not needed for terraform state.

@@ -1,0 +1,20 @@
+# order-service reference values from services/order-service/main.go
+service: order-service
+role: order create/list/status; EVENT PRODUCER (publishes to SQS)
+port: 8081
+requestPath: true        # HPA candidate
+publicFacing: false      # reached via api-gateway
+probes:
+  liveness:  { path: /livez,   port: 8081 }   # always 200
+  readiness: { path: /healthz, port: 8081 }   # pings DB, returns 503 when DB down
+dependencies:
+  postgres: true
+  redis: false
+  sqs: true              # producer
+env:
+  PORT: "8081"
+  DATABASE_URL: ""       # Required, postgres StatefulSet, contains password.
+  SQS_QUEUE_URL: ""      # Required, order-events queue from Terraform output.
+secrets:
+  - DATABASE_URL
+# SQS_QUEUE_URL is not secret; auth is via pod IRSA.

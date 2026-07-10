@@ -1,0 +1,18 @@
+# notification-service reference values from services/notification-service/main.go
+service: notification-service
+role: notifications log / delivery
+port: 8084
+requestPath: false       # called by worker on events; lower priority for HPA
+publicFacing: false      # reached via api-gateway / worker only
+probes:
+  liveness:  { path: /livez,   port: 8084 }   # always 200
+  readiness: { path: /healthz, port: 8084 }   # pings DB, returns 503 when DB down
+dependencies:
+  postgres: true
+  redis: false
+  sqs: false
+env:
+  PORT: "8084"
+  DATABASE_URL: ""       # Required, postgres, contains password.
+secrets:
+  - DATABASE_URL

@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard-api
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: dashboard-api
+    app.kubernetes.io/part-of: order-fulfillment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dashboard-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dashboard-api
+        app.kubernetes.io/part-of: order-fulfillment
+    spec:
+      containers:
+        - name: dashboard-api
+          image: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/dashboard-api
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: dashboard-api-config
+            - secretRef:
+                name: dashboard-api-secrets
+          ports:
+            - name: http
+              containerPort: 8086
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532

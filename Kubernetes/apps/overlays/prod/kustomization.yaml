@@ -1,0 +1,70 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: apps-prod
+resources:
+  - ../../base
+patches:
+  - target:
+      kind: Namespace
+      name: apps
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: apps-prod
+      - op: add
+        path: /metadata/labels/app.kubernetes.io~1environment
+        value: prod
+  - target:
+      kind: Ingress
+      name: order-platform
+    patch: |-
+      - op: replace
+        path: /metadata/annotations/external-dns.alpha.kubernetes.io~1hostname
+        value: app.lab.mohammedsayed.com
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: app.lab.mohammedsayed.com
+      - op: replace
+        path: /spec/tls/0/secretName
+        value: app-lab-mohammedsayed-com-tls
+      - op: replace
+        path: /spec/rules/0/host
+        value: app.lab.mohammedsayed.com
+replicas:
+  - name: api-gateway
+    count: 2
+  - name: dashboard-api
+    count: 2
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/environment: prod
+
+images:
+  - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/api-gateway-service
+    newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/api-gateway-service
+    newTag: ebdb9e8
+  - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/dashboard-api
+    newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/dashboard-api
+    newTag: ebdb9e8
+  - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/inventory-service
+    newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/inventory-service
+    newTag: ebdb9e8
+  - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/notification-service
+    newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/notification-service
+    newTag: ebdb9e8
+  - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/order-service
+    newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/order-service
+    newTag: ebdb9e8
+  - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/payment-service
+    newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/payment-service
+    newTag: ebdb9e8
+  - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/scheduler
+    newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/scheduler
+    newTag: ebdb9e8
+  - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/shipping-service
+    newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/shipping-service
+    newTag: ebdb9e8
+  - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/worker-service
+    newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/worker-service
+    newTag: ebdb9e8

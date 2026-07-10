@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - api-gateway/namespace.yaml
+  - api-gateway/configmap.yaml
+  - api-gateway/deployment.yaml
+  - api-gateway/service.yaml
+  - api-gateway/externalsecrets.yaml
+  - api-gateway/ingress.yaml
+  - dashboard-api/configmap.yaml
+  - dashboard-api/externalsecrets.yaml
+  - dashboard-api/deployment.yaml
+  - dashboard-api/service.yaml
+  - inventory-service/configmap.yaml
+  - inventory-service/deployment.yaml
+  - inventory-service/service.yaml
+  - inventory-service/externalsecrets.yaml
+  - notification-service/configmap.yaml
+  - notification-service/deployment.yaml
+  - notification-service/service.yaml
+  - notification-service/externalsecrets.yaml
+  - order-service/configmap.yaml
+  - order-service/serviceaccount.yaml
+  - order-service/deployment.yaml
+  - order-service/service.yaml
+  - order-service/externalsecrets.yaml
+  - payment-service/configmap.yaml
+  - payment-service/serviceaccount.yaml
+  - payment-service/deployment.yaml
+  - payment-service/service.yaml
+  - payment-service/externalsecrets.yaml
+  - scheduler/configmap.yaml
+  - scheduler/deployment.yaml
+  - scheduler/service.yaml
+  - scheduler/externalsecrets.yaml
+  - shipping-service/configmap.yaml
+  - shipping-service/serviceaccount.yaml
+  - shipping-service/deployment.yaml
+  - shipping-service/service.yaml
+  - shipping-service/externalsecrets.yaml
+  - worker/configmap.yaml
+  - worker/serviceaccount.yaml
+  - worker/deployment.yaml
+  - worker/service.yaml

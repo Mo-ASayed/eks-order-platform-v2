@@ -1,0 +1,181 @@
+name: Deploy Services
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "services/**"
+      - ".github/workflows/deploy-services.yml"
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to build, or all/changed"
+        required: false
+        default: "changed"
+        type: choice
+        options:
+          - changed
+          - all
+          - api-gateway
+          - dashboard-api
+          - inventory-service
+          - notification-service
+          - order-service
+          - payment-service
+          - scheduler
+          - shipping-service
+          - worker
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: app-cd-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+
+jobs:
+  discover:
+    name: Discover services to build
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      count: ${{ steps.detect.outputs.count }}
+      tag: ${{ steps.detect.outputs.tag }}
+      account_id: ${{ steps.whoami.outputs.account_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get account ID
+        id: whoami
+        run: |
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          echo "account_id=$account_id" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Kustomize
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Detect services
+        id: detect
+        shell: bash
+        env:
+          ACCOUNT_ID: ${{ steps.whoami.outputs.account_id }}
+          REQUESTED: ${{ github.event.inputs.service || 'changed' }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/app-cd/detect-services.sh"
+
+  build-and-push:
+    name: Build and push ${{ matrix.service }}
+    needs:
+      - discover
+    if: needs.discover.outputs.count != '0'
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCOUNT_ID: ${{ needs.discover.outputs.account_id }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.discover.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image repository
+        id: image
+        shell: bash
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/app-cd/set-image-repo.sh"
+
+      - name: Ensure ECR repository exists
+        shell: bash
+        env:
+          REPO: ${{ steps.image.outputs.repo }}
+        run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/app-cd/ensure-ecr-repo.sh"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build into the local docker daemon (no push yet) so Trivy can scan the
+      # exact image before it reaches ECR. Single-platform build, so load works.
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services/${{ matrix.service }}
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ steps.image.outputs.image }}:${{ needs.discover.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.image.outputs.image }}:${{ needs.discover.outputs.tag }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: "0" # report-only first pass; set 1 to gate after triage
+
+      # Re-runs from the gha cache (no rebuild) and pushes the scanned image.
+      - name: Push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services/${{ matrix.service }}
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.image.outputs.image }}:${{ needs.discover.outputs.tag }}
+            ${{ steps.image.outputs.image }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  update-dev-manifest:
+    name: Update dev GitOps image tags
+    needs:
+      - discover
+      - build-and-push
+    if: needs.discover.outputs.count != '0' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCOUNT_ID: ${{ needs.discover.outputs.account_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Kustomize
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Update dev overlay image tags and push
+        working-directory: Kubernetes/apps/overlays/dev
+        env:
+          MATRIX: ${{ needs.discover.outputs.matrix }}
+          TAG: ${{ needs.discover.outputs.tag }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/app-cd/update-dev-manifest.sh"

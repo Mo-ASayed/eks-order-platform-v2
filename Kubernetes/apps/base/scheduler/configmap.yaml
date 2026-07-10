@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scheduler-config
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: scheduler
+    app.kubernetes.io/part-of: order-fulfillment
+data:
+  HEALTH_PORT: "8091"

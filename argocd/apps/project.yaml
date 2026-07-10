@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: order-platform
+  namespace: argocd
+spec:
+  description: Order fulfillment platform applications
+  sourceRepos:
+    - https://github.com/Mo-ASayed/eks-order-platform-v2.git
+  destinations:
+    - namespace: apps-dev
+      server: https://kubernetes.default.svc
+    - namespace: apps-prod
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
