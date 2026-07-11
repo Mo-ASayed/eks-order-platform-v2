@@ -129,7 +129,7 @@ jobs:
           push: false
           tags: ${{ steps.image.outputs.image }}:${{ needs.discover.outputs.tag }}
           cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }},ignore-error=true
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
@@ -151,8 +151,8 @@ jobs:
           tags: |
             ${{ steps.image.outputs.image }}:${{ needs.discover.outputs.tag }}
             ${{ steps.image.outputs.image }}:latest
+          # Reuse the cache exported by "Build image"; no re-export needed.
           cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
   update-dev-manifest:
     name: Update dev GitOps image tags
