@@ -43,28 +43,28 @@ labels:
 images:
 - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/api-gateway-service
   newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/api-gateway-service
-  newTag: ebdb9e8
+  newTag: 2fb6a23
 - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/dashboard-api
   newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/dashboard-api
-  newTag: ebdb9e8
+  newTag: 2fb6a23
 - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/inventory-service
   newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/inventory-service
-  newTag: ebdb9e8
+  newTag: 2fb6a23
 - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/notification-service
   newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/notification-service
-  newTag: ebdb9e8
+  newTag: 2fb6a23
 - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/order-service
   newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/order-service
-  newTag: ebdb9e8
+  newTag: 2fb6a23
 - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/payment-service
   newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/payment-service
-  newTag: ebdb9e8
+  newTag: 2fb6a23
 - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/scheduler
   newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/scheduler
-  newTag: ebdb9e8
+  newTag: 2fb6a23
 - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/shipping-service
   newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/shipping-service
-  newTag: ebdb9e8
+  newTag: 2fb6a23
 - name: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/worker-service
   newName: 767398132018.dkr.ecr.eu-west-2.amazonaws.com/worker-service
-  newTag: ebdb9e8
+  newTag: 2fb6a23
