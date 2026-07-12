@@ -30,11 +30,6 @@ patches:
   target:
     kind: Ingress
     name: order-platform
-replicas:
-- count: 1
-  name: api-gateway
-- count: 1
-  name: dashboard-api
 labels:
 - includeSelectors: true
   pairs:

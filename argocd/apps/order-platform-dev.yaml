@@ -21,4 +21,10 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ApplyOutOfSyncOnly=true
+  # HPA owns the replicas, so ignore that field here
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
   revisionHistoryLimit: 10

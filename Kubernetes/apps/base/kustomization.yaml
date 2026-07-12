@@ -7,10 +7,12 @@ resources:
   - api-gateway/service.yaml
   - api-gateway/externalsecrets.yaml
   - api-gateway/ingress.yaml
+  - api-gateway/hpa.yaml
   - dashboard-api/configmap.yaml
   - dashboard-api/externalsecrets.yaml
   - dashboard-api/deployment.yaml
   - dashboard-api/service.yaml
+  - dashboard-api/hpa.yaml
   - inventory-service/configmap.yaml
   - inventory-service/deployment.yaml
   - inventory-service/service.yaml

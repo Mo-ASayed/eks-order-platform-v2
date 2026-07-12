@@ -30,11 +30,21 @@ patches:
       - op: replace
         path: /spec/rules/0/host
         value: app.lab.mohammedsayed.com
-replicas:
-  - name: api-gateway
-    count: 2
-  - name: dashboard-api
-    count: 2
+  # prod floor is 2 replicas
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: api-gateway
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: dashboard-api
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
 labels:
   - includeSelectors: true
     pairs:
