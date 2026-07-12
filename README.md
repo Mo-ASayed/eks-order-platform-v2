@@ -106,6 +106,12 @@ Ingress           path rules
 
 DNS records are created automatically by ExternalDNS and certificates are issued and renewed automatically by cert-manager, so a new hostname becomes a working HTTPS URL with no manual steps.
 
+The dashboard below is the live system: orders moving through the full lifecycle (cancelled, confirmed, processing, shipped), the revenue and active-shipment counters, and all nine services reporting healthy.
+
+![Order dashboard showing orders across the full lifecycle](images/app-dashboard.jpg)
+
+![Service health panel: all nine services healthy](images/services-health.jpg)
+
 ---
 
 ## How a change ships
@@ -120,7 +126,11 @@ Two pipelines, kept apart by which paths changed. A change under `terraform/` is
 
 Dev auto-syncs. Prod is a manual sync in the ArgoCD UI. There are no static AWS keys anywhere: GitHub Actions authenticates over OIDC, assuming a role whose trust policy is locked to this repository.
 
-> 📸 **Image:** a merge to main showing App CD build and push and ArgoCD syncing. Save to `images/pipeline.png` and embed with `![Deployment pipeline](images/pipeline.png)`.
+ArgoCD makes the delivery half of this visible. The App-of-Apps root fans out to the `dev` and `prod` Applications, and each service's manifests, config and workloads sync from Git:
+
+![ArgoCD App-of-Apps: root, dev and prod Applications](images/argocd-apps.jpg)
+
+![ArgoCD resource tree for the dev application, synced and healthy](images/argocd-apps-tree.gif)
 
 ---
 
@@ -158,15 +168,52 @@ Infrastructure, Kubernetes manifests and pipelines stay separate so provisioning
 
 **Secrets.** AWS Secrets Manager is the single source of truth. Terraform generates the Postgres, Redis and JWT secrets straight into it. The External Secrets Operator then syncs them into pods using IRSA. Some are templated into ready-made values such as `DATABASE_URL` and `REDIS_URL`. Nothing sensitive is ever in Git.
 
-**Storage and backups.** Postgres and Redis persist to encrypted gp3 EBS volumes on a `gp3-retain` storage class, so an accidental `kubectl delete` does not take the data with it. Backups use real EBS snapshots through the CSI snapshot controller. The restore path was tested end to end: write a row, snapshot the volume, create a fresh PVC from it and confirm the row is there.
+**Storage and backups.** Postgres and Redis persist to encrypted gp3 EBS volumes on a `gp3-retain` storage class, so an accidental `kubectl delete` does not take the data with it. Backups are real EBS snapshots taken through the CSI snapshot controller. The restore path is tested end to end: write a known row, snapshot the live PVC, recover it into a new CloudNativePG cluster from that snapshot, and confirm the row is present.
 
-> 📸 **Image:** the snapshot ready, the restored PVC bound and the known row in the restored data. Save to `images/restore.png` and embed with `![Snapshot restore](images/restore.png)`.
+```bash
+# snapshot the live Postgres PVC
+kubectl apply -f - <<'EOF'
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata: {name: pg-restore-test, namespace: data}
+spec:
+  volumeSnapshotClassName: ebs-csi-snapshot-class
+  source: {persistentVolumeClaimName: postgres-1}
+EOF
+
+# recover into a fresh cluster straight from the snapshot
+kubectl apply -f - <<'EOF'
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata: {name: postgres-restore, namespace: data}
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  storage: {storageClass: gp3-retain, size: 20Gi}
+  bootstrap:
+    recovery:
+      volumeSnapshots:
+        storage: {name: pg-restore-test, kind: VolumeSnapshot, apiGroup: snapshot.storage.k8s.io}
+EOF
+
+# the known row survived the snapshot -> restore
+kubectl exec -n data postgres-restore-1 -- psql -U postgres -d app -c "SELECT * FROM restore_test;"
+#  RESTORE-TEST | snapshot proof | 2026-07-11 18:30:48+00
+```
+
+![Postgres snapshot recovered into a new cluster with the known row intact](images/restore.png)
+
+A `VolumeSnapshot` of a running primary is crash-consistent; for point-in-time recovery the platform falls back to CloudNativePG's `Backup` CRD with WAL archiving to S3.
 
 **Scaling.** Karpenter provisions right-sized nodes in seconds and consolidates them when load drops. The stateless request services scale out by replica count per environment. The data tier stays fixed (scaling a single-writer Postgres sideways buys nothing) and the worker scales by queue depth. The first thing to strain under load is Postgres connections, which is why the write services are capped.
 
 **Observability.** kube-prometheus-stack runs Prometheus and Grafana, a CloudWatch exporter brings SQS queue depth in next to the cluster metrics. Three alerts are worth waking someone: the dead-letter queue is not empty, Postgres is down or the api-gateway is failing readiness.
 
-> 📸 **Image:** Grafana dashboards with an alert firing. Save to `images/observability.png` and embed with `![Grafana dashboards](images/observability.png)`.
+![Grafana dashboards grouped by service](images/grafana-dashboards-list.jpeg)
+
+![Prometheus alerting rules: DLQ depth, Postgres down, gateway readiness](images/prometheus-alerts-rules.jpeg)
+
+Prometheus scrape targets across the platform are healthy — see also [`prometheus-targets-healthy-1.jpeg`](images/prometheus-targets-healthy-1.jpeg), [`grafana-node-compute-resources.jpeg`](images/grafana-node-compute-resources.jpeg) and [`grafana-cluster-networking.jpeg`](images/grafana-cluster-networking.jpeg).
 
 ---
 
