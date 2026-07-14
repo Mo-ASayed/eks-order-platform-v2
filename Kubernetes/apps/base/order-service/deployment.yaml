@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: order-service
     app.kubernetes.io/part-of: order-fulfillment
 spec:
-  replicas: 1
+  # HPA owns replicas
   selector:
     matchLabels:
       app.kubernetes.io/name: order-service
