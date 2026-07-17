@@ -77,10 +77,15 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
         run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/app-cd/detect-services.sh"
 
+  test:
+    name: Go lint & test
+    uses: ./.github/workflows/go-checks.yml
+
   build-and-push:
     name: Build and push ${{ matrix.service }}
     needs:
       - discover
+      - test
     if: needs.discover.outputs.count != '0'
     runs-on: ubuntu-latest
     env:
@@ -118,8 +123,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Build into the local docker daemon (no push yet) so Trivy can scan the
-      # exact image before it reaches ECR. Single-platform build, so load works.
+      # Load into the local daemon (no push) so Trivy scans the exact image before ECR.
       - name: Build image
         uses: docker/build-push-action@v6
         with:
@@ -139,9 +143,8 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           trivyignores: .trivyignore
-          exit-code: "0" # report-only first pass; set 1 to gate after triage
+          exit-code: "0" # report-only; set to "1" to gate on findings
 
-      # Re-runs from the gha cache (no rebuild) and pushes the scanned image.
       - name: Push image
         uses: docker/build-push-action@v6
         with:
@@ -151,7 +154,6 @@ jobs:
           tags: |
             ${{ steps.image.outputs.image }}:${{ needs.discover.outputs.tag }}
             ${{ steps.image.outputs.image }}:latest
-          # Reuse the cache exported by "Build image"; no re-export needed.
           cache-from: type=gha,scope=${{ matrix.service }}
 
   update-dev-manifest:

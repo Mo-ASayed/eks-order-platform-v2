@@ -1,10 +1,7 @@
 name: Deploy Infrastructure
 
-# Applies terraform/envs/dev against the S3 backend. A security scan
-# (tflint / checkov / trivy) runs first; nothing touches AWS until it passes.
-# All Terraform that mutates AWS (EKS bootstrap, plan and apply) runs in the
-# gated `apply` job, so a push to main never changes cloud state until the
-# `dev` environment approval is granted.
+# Scan runs first; nothing touches AWS until it passes. All AWS-mutating Terraform
+# runs in the gated `apply` job, behind the `dev` environment approval.
 
 on:
   push:
@@ -69,7 +66,7 @@ jobs:
     name: Terraform apply
     needs: scan
     runs-on: ubuntu-latest
-    environment: dev # add required reviewers here for the manual approval gate
+    environment: dev # manual approval gate (set required reviewers here)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -93,9 +90,8 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform validate
 
-      # Helm, Kubernetes and kubectl providers need live EKS outputs. If the
-      # cluster is absent, bootstrap EKS first so the full plan can resolve.
-      # This is an apply, so it lives behind the `dev` approval gate.
+      # The helm/kubernetes/kubectl providers need live EKS outputs, so bootstrap
+      # EKS first when the cluster is absent; the full plan can then resolve.
       - name: Terraform apply (bootstrap eks)
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform apply -input=false -auto-approve -target=module.eks

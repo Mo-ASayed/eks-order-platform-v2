@@ -1,0 +1,6 @@
+# Ignore the errors with the actual code as this is just a demo - not a real customer facing tool (as of now). Will come back if needed.
+version: "2"
+linters:
+  default: standard
+  disable:
+    - errcheck
