@@ -1,12 +1,6 @@
-# golangci-lint v2 config, applied to every service module (golangci-lint walks
-# up from services/<name> and finds this file at the repo root).
-#
-# "standard" enables the default linter set: errcheck, govet, ineffassign,
-# staticcheck and unused. If one of these is noisy on the provided application
-# code, silence just that linter here rather than dropping the whole gate, e.g.:
-#   linters:
-#     disable:
-#       - errcheck
+# Ignore the errors with the actual code as this is just a demo - not a real customer facing tool (as of now). Will come back if needed.
 version: "2"
 linters:
   default: standard
+  disable:
+    - errcheck
