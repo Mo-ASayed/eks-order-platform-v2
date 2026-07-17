@@ -374,9 +374,10 @@ func handleCarrierWebhook(w http.ResponseWriter, r *http.Request) {
 	// Update shipment status
 	db.Exec("UPDATE shipments SET status = $1, updated_at = NOW() WHERE id = $2", req.Status, shipmentID)
 
-	if req.Status == "delivered" {
+	switch req.Status {
+	case "delivered":
 		db.Exec("UPDATE shipments SET delivered_at = NOW() WHERE id = $1", shipmentID)
-	} else if req.Status == "in_transit" {
+	case "in_transit":
 		db.Exec("UPDATE shipments SET shipped_at = COALESCE(shipped_at, NOW()) WHERE id = $1", shipmentID)
 	}
 
