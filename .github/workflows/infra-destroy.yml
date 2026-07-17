@@ -1,11 +1,7 @@
 name: Destroy Infrastructure
 
-# Destroys envs/dev in phases while keeping the rebuild anchors:
-# module.dns for the hosted zone and module.github_actions for CI identity.
-# Kubernetes resources go first so controllers can clear finalizers, then NLBs,
-# Karpenter capacity, EKS, a wait for EKS's own control-plane ENIs to release,
-# and finally the VPC.
-# Manual only: typed confirmation plus `dev` environment approval.
+# Phased teardown. Keeps module.dns and module.github_actions as rebuild anchors
+# (DNS zone + CI identity). Manual only: typed confirmation + `dev` approval.
 
 on:
   workflow_dispatch:
@@ -34,12 +30,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev # manual approval gate (required reviewers)
     steps:
-      # Checkout first so the local pipeline scripts are available.
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Validate before AWS or Terraform setup. The typed phrase is passed via
-      # env so arbitrary input cannot alter the shell command.
       - name: Validate confirmation
         env:
           CONFIRM_PHRASE: ${{ github.event.inputs.confirm }}
@@ -60,20 +53,16 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init -input=false
 
-      # Finalizer and root-first logic lives in
-      # scripts/pipeline-scripts/infra-destroy/preclean-argocd-apps.sh.
       - name: Pre-clean ArgoCD applications
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/infra-destroy/preclean-argocd-apps.sh"
 
-      # Delete CNPG Clusters before the operator is torn down so finalizers clear
-      # and the "data" namespace does not hang in Terminating. Logic lives in
-      # scripts/pipeline-scripts/infra-destroy/preclean-stateful-tier.sh.
+      # Delete CNPG Clusters before the operator goes, so finalisers clear and the
+      # data namespace doesn't hang in Terminating.
       - name: Pre-clean stateful tier
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/infra-destroy/preclean-stateful-tier.sh"
 
-      # Remove app data and queues while controllers still have capacity.
       - name: Terraform destroy stateful tier and event bus
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
@@ -81,11 +70,8 @@ jobs:
             -target=module.stateful_tier \
             -target=module.eventbus
 
-      # external-secrets keeps its CRDs (helm.sh/resource-policy: keep); the helm
-      # provider surfaces Helm's "kept resources" message as an uninstall error
-      # and stalls the platform_addons destroy. Uninstall it cleanly first. Logic
-      # lives in
-      # scripts/pipeline-scripts/infra-destroy/preclean-external-secrets.sh.
+      # external-secrets keeps its CRDs (resource-policy: keep); Helm reports that
+      # as an uninstall error and stalls the platform_addons destroy, so clear it first.
       - name: Pre-clean external-secrets
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/infra-destroy/preclean-external-secrets.sh"
@@ -94,25 +80,20 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform destroy -input=false -auto-approve -target=module.platform_addons
 
-      # NLB ENI wait logic lives in
-      # scripts/pipeline-scripts/infra-destroy/wait-for-load-balancers.sh.
       - name: Wait for Kubernetes load balancers
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/infra-destroy/wait-for-load-balancers.sh"
 
-      # Karpenter cleanup lives in
-      # scripts/pipeline-scripts/infra-destroy/drain-karpenter-nodes.sh.
       - name: Drain Karpenter nodes
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/infra-destroy/drain-karpenter-nodes.sh"
 
-      # Capture before module.vpc is destroyed; needed by the ENI wait below.
+      # Capture before module.vpc is destroyed, needed by the ENI below.
       - name: Capture VPC ID
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: echo "VPC_ID=$(terraform output -raw vpc_id)" >> "$GITHUB_ENV"
 
-      # DNS and CI stay out of target scope so the next pipeline can
-      # authenticate and rebuild.
+      # DNS and CI stay out of scope so the next pipeline can authenticate and rebuild.
       - name: Terraform destroy cluster
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
@@ -122,10 +103,8 @@ jobs:
             -target=module.karpenter \
             -target=module.eks
 
-      # EKS's own control-plane ENIs release asynchronously after the cluster
-      # is gone; wait for them so the subnet/VPC destroy below doesn't race it.
-      # Logic lives in
-      # scripts/pipeline-scripts/infra-destroy/wait-for-eks-eni-cleanup.sh.
+      # EKS control-plane ENIs release asynchronously; wait so the VPC destroy
+      # doesn't race them.
       - name: Wait for EKS control-plane ENI cleanup
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: bash "$GITHUB_WORKSPACE/scripts/pipeline-scripts/infra-destroy/wait-for-eks-eni-cleanup.sh"

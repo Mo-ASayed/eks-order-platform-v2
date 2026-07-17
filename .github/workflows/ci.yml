@@ -1,8 +1,5 @@
 name: PR & Branch Checks
 
-# Validation only for PRs and non-main pushes. No cloud credentials are used:
-# Terraform runs with -backend=false and nothing is applied.
-
 on:
   pull_request:
     branches:
@@ -14,7 +11,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read # paths-filter lists changed files via the PR API
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -30,6 +27,7 @@ jobs:
     outputs:
       terraform: ${{ steps.filter.outputs.terraform }}
       kubernetes: ${{ steps.filter.outputs.kubernetes }}
+      go: ${{ steps.filter.outputs.go }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,6 +44,8 @@ jobs:
               - 'Kubernetes/**'
               - 'argocd/**'
               - '.github/workflows/pr-checks.yml'
+            go:
+              - 'services/**'
 
   terraform-validate:
     name: Terraform validate / tflint / checkov
@@ -153,3 +153,9 @@ jobs:
           severity: CRITICAL,HIGH
           trivyignores: .trivyignore
           exit-code: "1"
+
+  go-checks:
+    name: Go lint & test
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    uses: ./.github/workflows/go-checks.yml
